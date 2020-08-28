@@ -6,6 +6,7 @@ and do not take raw numpy as input.
 
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import tensorflow_addons as tfa
 
 
 def binary_crossentropy(y_true, y_pred):
@@ -96,20 +97,15 @@ def f1_loss(y_true, y_pred):
 
 def rmse(y_true, y_pred):
     """Calculate root mean square error (rmse) between true and predicted coordinates."""
-    coord_true = y_true[..., 1:]
-    coord_pred = y_pred[..., 1:]
+    comparison = tf.equal(y_true, tf.constant(0, dtype=tf.float32))
 
-    comparison = tf.equal(coord_true, tf.constant(0, dtype=tf.float32))
+    y_true_new = tf.where(comparison, tf.zeros_like(y_true), y_true)
+    y_pred_new = tf.where(comparison, tf.zeros_like(y_pred), y_pred)
 
-    coord_true_new = tf.where(comparison, tf.zeros_like(coord_true), coord_true)
-    coord_pred_new = tf.where(comparison, tf.zeros_like(coord_pred), coord_pred)
-
-    sum_rc_coords = K.sum(coord_true, axis=-1)
+    sum_rc_coords = K.sum(y_true, axis=-1)
     n_true_spots = tf.math.count_nonzero(sum_rc_coords, dtype=tf.float32)
 
-    squared_displacement_xy_summed = K.sum(
-        K.square(coord_true_new - coord_pred_new), axis=-1
-    )
+    squared_displacement_xy_summed = K.sum(K.square(y_true_new - y_pred_new), axis=-1)
     rmse_value = K.sqrt(K.sum(squared_displacement_xy_summed) / n_true_spots)
 
     return rmse_value
@@ -135,7 +131,8 @@ def combined_bce_rmse(y_true, y_pred):
     rmse is rescaled with 1/10 to weigh more bce in the calculation of the loss.
     """
     return (
-        binary_crossentropy(y_true[..., 0], y_pred[..., 0]) + rmse(y_true, y_pred) / 10
+        binary_crossentropy(y_true[..., 0], y_pred[..., 0])
+        + rmse(y_true[..., 1:], y_pred[..., 1:]) / 10
     )
 
 
@@ -152,27 +149,32 @@ class FocalLoss(tf.keras.losses.Loss):
     """
 
     def __init__(self, gamma: float, alpha: float = 1.0):
+        super().__init__()
         self.gamma = gamma
         self.alpha = alpha
 
     def call(self, y_true, y_pred):
         """Returns the FocalLoss."""
-        p_t = tf.where(y_true == 1, y_pred, 1 - y_pred)
+        p_t = (y_true * y_pred) + ((1 - y_true) * (1 - y_pred))
+        alpha = y_true * self.alpha + (1 - y_true) * (1 - self.alpha)
 
         y_pred = tf.expand_dims(y_pred, axis=-1)
         y_true = tf.expand_dims(y_true, axis=-1)
 
         bce = tf.keras.losses.binary_crossentropy(y_true, y_pred)
-        floss_no_reduction = (self.alpha * (1 - p_t) ** self.gamma) * bce
-
+        floss_no_reduction = (alpha * tf.pow((1 - p_t), self.gamma)) * bce
         # The outer K.mean is used instead of K.sum because the difference is just a rescaling factor
         return K.mean(K.mean(floss_no_reduction, axis=0))
 
 
 def focal_loss(y_true, y_pred, gamma: float = 0.0, alpha: float = 1.0):
     """Focal loss function."""
-    floss = FocalLoss(gamma=gamma, alpha=alpha)
-    return floss.call(y_true[..., 0], y_pred[..., 0])
+    # floss = FocalLoss(gamma=gamma, alpha=alpha)
+    # return floss.call(y_true, y_pred)
+    floss = tfa.losses.sigmoid_focal_crossentropy(
+        y_true=y_true, y_pred=y_pred, alpha=alpha, gamma=gamma
+    )
+    return floss
 
 
 def combined_focal_rmse(y_true, y_pred):
@@ -184,4 +186,4 @@ def combined_focal_rmse(y_true, y_pred):
 
     rmse is rescaled with 1/10 to weigh more bce in the calculation of the loss.
     """
-    return focal_loss(y_true, y_pred) + rmse(y_true, y_pred) / 10
+    return focal_loss(y_true[..., 0], y_pred[..., 0]) + rmse(y_true[..., 1:], y_pred[..., 1:]) / 10
