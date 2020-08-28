@@ -134,4 +134,54 @@ def combined_bce_rmse(y_true, y_pred):
 
     rmse is rescaled with 1/10 to weigh more bce in the calculation of the loss.
     """
-    return binary_crossentropy(y_true[..., 0], y_pred[..., 0]) + rmse(y_true, y_pred) / 10
+    return (
+        binary_crossentropy(y_true[..., 0], y_pred[..., 0]) + rmse(y_true, y_pred) / 10
+    )
+
+
+class FocalLoss(tf.keras.losses.Loss):
+    r"""Focal loss class. Focal loss is able to deal with class imbalanced data.
+
+    The definition:
+    .. math::
+        \textrm{FocalLoss(p_{t}, y)} = \{alpha} \cdot (1 - p_{t}(y))^{\gamma} \cdot textrm{bce(p_{t}(y))}.
+
+    Where bce is the binary cross entropy.
+    p_{t}(y) = p        if y = 1
+    p_{t}(y) = 1 - p    if y != 1
+    """
+
+    def __init__(self, gamma: float, alpha: float = 1.0):
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def call(self, y_true, y_pred):
+        """Returns the FocalLoss."""
+        p_t = tf.where(y_true == 1, y_pred, 1 - y_pred)
+
+        y_pred = tf.expand_dims(y_pred, axis=-1)
+        y_true = tf.expand_dims(y_true, axis=-1)
+
+        bce = tf.keras.losses.binary_crossentropy(y_true, y_pred)
+        floss_no_reduction = (self.alpha * (1 - p_t) ** self.gamma) * bce
+
+        # The outer K.mean is used instead of K.sum because the difference is just a rescaling factor
+        return K.mean(K.mean(floss_no_reduction, axis=0))
+
+
+def focal_loss(y_true, y_pred, gamma: float = 0.0, alpha: float = 1.0):
+    """Focal loss function."""
+    floss = FocalLoss(gamma=gamma, alpha=alpha)
+    return floss.call(y_true[..., 0], y_pred[..., 0])
+
+
+def combined_focal_rmse(y_true, y_pred):
+    """Loss that combines focal loss for probability and rmse for coordinates.
+
+    Optimal value for focal loss  is 0.
+    Optimal value for rmse is 0.
+    Therefore, optimal value for combined_focal_rmse is 0.
+
+    rmse is rescaled with 1/10 to weigh more bce in the calculation of the loss.
+    """
+    return focal_loss(y_true, y_pred) + rmse(y_true, y_pred) / 10
