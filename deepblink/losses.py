@@ -167,14 +167,14 @@ class FocalLoss(tf.keras.losses.Loss):
         return K.mean(K.mean(floss_no_reduction, axis=0))
 
 
-def focal_loss(y_true, y_pred, gamma: float = 0.0, alpha: float = 1.0):
+def focal_loss(y_true, y_pred, gamma: float = 0., alpha: float = 1.):
     """Focal loss function."""
     # floss = FocalLoss(gamma=gamma, alpha=alpha)
     # return floss.call(y_true, y_pred)
     floss = tfa.losses.sigmoid_focal_crossentropy(
         y_true=y_true, y_pred=y_pred, alpha=alpha, gamma=gamma
     )
-    return floss
+    return tf.reduce_mean(floss)
 
 
 def combined_focal_rmse(y_true, y_pred):
