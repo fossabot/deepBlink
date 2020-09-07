@@ -1,4 +1,4 @@
-"""Fully convolutional networks with / without dropout."""
+"""Densenet implementation with custom parts."""
 
 import tensorflow as tf
 
@@ -11,6 +11,7 @@ def conv_block(x: tf.keras.layers.Layer, growth_rate: float):
     Arguments:
         x: Input tensor.
         growth_rate: Growth rate at dense layers.
+
     Returns:
         Output tensor for the block.
     """
@@ -30,6 +31,7 @@ def dense_block(x: tf.keras.layers.Layer, blocks: int):
     Arguments:
         x: Input tensor.
         blocks: The number of building blocks.
+
     Returns:
         Output tensor for the block.
     """
@@ -44,6 +46,7 @@ def transition_block(x: tf.keras.layers.Layer, reduction: float):
     Arguments:
         x: Input tensor.
         reduction: Compression rate at transition layers.
+
     Returns:
         Output tensor for the block.
     """
@@ -60,10 +63,8 @@ def dense_net():
     """Dense network implementation.
 
     Adapted from tensorflows internal tf.keras.applications.DenseNet121.
-
-    ref: https://arxiv.org/abs/1608.06993
+    ref: https://arxiv.org/abs/1608.06993.
     """
-
     inputs = tf.keras.layers.Input(shape=(512, 512, 1))
 
     x = tf.keras.layers.ZeroPadding2D(padding=((3, 3), (3, 3)))(inputs)
