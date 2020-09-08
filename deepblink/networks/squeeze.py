@@ -7,6 +7,8 @@ import tensorflow as tf
 def squeeze_block(x: tf.keras.layers.Layer, ratio: int = 8):
     """Squeeze and excitation block.
 
+    ref: https://arxiv.org/pdf/1709.01507.pdf.
+
     Args:
         x: Input tensor.
         ratio: Number of output filters.
